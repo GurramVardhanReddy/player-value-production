@@ -9,7 +9,7 @@ dates=$("$PVP_PYTHON" -c "from pvprod import steps, timeline; print(' '.join(str
 start=$(date +%s); ok=0; failed=0
 for d in $dates; do
   if "$AIRFLOW" dags test player_value_weekly "$d" > "$LOG_DIR/$d.log" 2>&1 \
-     && [ "$(grep -c 'new_state=success' "$LOG_DIR/$d.log")" -eq 5 ]; then
+     && [ "$(grep -c 'new_state=success' "$LOG_DIR/$d.log")" -eq 6 ]; then
     ok=$((ok + 1)); echo "$d ok"
   else
     failed=$((failed + 1)); echo "$d FAILED"
