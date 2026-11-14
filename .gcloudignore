@@ -1,0 +1,15 @@
+# Cloud Build context for the scoring image: code + the exported champion only.
+# (Without this file gcloud would use .gitignore, which excludes serving/model.)
+.git/
+.github/
+data/
+state/
+results/
+tests/
+dags/
+scripts/
+infra/
+airflow_home/
+**/__pycache__/
+*.md
+mlruns/

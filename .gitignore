@@ -1,0 +1,14 @@
+/data/
+/state/
+serving/model/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+airflow_home/
+.env
+mlruns/
+mlflow.db
+.terraform/
+*.tfstate*
+tfplan

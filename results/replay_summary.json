@@ -1,0 +1,79 @@
+{
+  "weekly_runs": 68,
+  "runs_with_activity": 33,
+  "production_batches": 16,
+  "players_scored": 29472,
+  "scored_by_versions": [
+    "1"
+  ],
+  "drift": {
+    "batches_with_feature_alert": 14,
+    "batches_with_score_alert": 0,
+    "alert_features": {
+      "reg_to_first_bet": 14,
+      "reg_to_first_dep": 14,
+      "peak_day_share": 3,
+      "active_days_90": 2,
+      "log_stake_90": 2,
+      "log_stake_m1": 2,
+      "log_max_7d_stake": 2,
+      "bets_90": 1,
+      "recency": 1,
+      "log_stake_wk1": 1,
+      "log_max_day_stake": 1,
+      "live_share": 1,
+      "m3_vs_m1": 1,
+      "age_at_first_bet": 1
+    }
+  },
+  "performance": {
+    "top10_ggr_share_first_4_batches": 0.6384,
+    "top10_ggr_share_last_4_batches": 0.6214,
+    "turnover_total_ratio_range": [
+      0.463,
+      1.46
+    ],
+    "spearman_top_drift_psi_vs_top10_share": 0.03
+  },
+  "retraining": {
+    "challengers_trained": 3,
+    "promotions_after_bootstrap": 1,
+    "decisions": [
+      {
+        "challenger": "2",
+        "champion": "1",
+        "train_rows": 36445,
+        "holdout_rows": 2765,
+        "promoted": false,
+        "challenger_top10": 0.7002,
+        "champion_top10": 0.6902,
+        "challenger_total_ratio": 0.952,
+        "champion_total_ratio": 1.019
+      },
+      {
+        "challenger": "3",
+        "champion": "1",
+        "train_rows": 39556,
+        "holdout_rows": 1228,
+        "promoted": true,
+        "challenger_top10": 0.628,
+        "champion_top10": 0.6143,
+        "challenger_total_ratio": 1.001,
+        "champion_total_ratio": 1.062
+      },
+      {
+        "challenger": "4",
+        "champion": "3",
+        "train_rows": 40784,
+        "holdout_rows": 463,
+        "promoted": false,
+        "challenger_top10": 0.6106,
+        "champion_top10": 0.6025,
+        "challenger_total_ratio": 0.687,
+        "champion_total_ratio": 0.738
+      }
+    ]
+  },
+  "registry_versions": 4,
+  "final_champion": "3"
+}

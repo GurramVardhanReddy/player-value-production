@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[pipeline,serve,dev]"
+      - run: ruff check .
+      - run: pytest -q
+
+  airflow:
+    # The DAG must import cleanly under the Airflow version it runs on
+    runs-on: ubuntu-latest
+    env:
+      AIRFLOW_HOME: ${{ github.workspace }}/airflow_home
+      AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "apache-airflow==3.1.3" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.1.3/constraints-3.12.txt"
+      - run: |
+          python - <<'PY'
+          from airflow.models.dagbag import DagBag
+          bag = DagBag(include_examples=False)
+          assert not bag.import_errors, bag.import_errors
+          dag = bag.get_dag("player_value_weekly")
+          edges = {("ensure_champion", "score_new_batches"), ("score_new_batches", "evaluate_matured"),
+                   ("evaluate_matured", "maybe_retrain"), ("maybe_retrain", "export_champion"),
+                   ("score_new_batches", "publish_scores"), ("export_champion", "publish_scores")}
+          found = {(t.task_id, d) for t in dag.tasks for d in t.downstream_task_ids}
+          assert found == edges, found
+          print("DAG ok:", dag.dag_id, len(dag.tasks), "tasks")
+          PY
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: python scripts/smoke_model.py
+      - run: docker build -t player-value-api .
+      - run: |
+          docker run -d -p 8080:8080 --name api player-value-api
+          for i in $(seq 1 30); do curl -sf localhost:8080/health && break; sleep 1; done
+          curl -sf localhost:8080/model
