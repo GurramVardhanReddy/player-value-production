@@ -34,7 +34,7 @@ jobs:
           from airflow.models.dagbag import DagBag
           bag = DagBag(include_examples=False)
           assert not bag.import_errors, bag.import_errors
-          dag = bag.get_dag("player_value_weekly")
+          dag = bag.dags["player_value_weekly"]
           edges = {("ensure_champion", "score_new_batches"), ("score_new_batches", "evaluate_matured"),
                    ("evaluate_matured", "maybe_retrain"), ("maybe_retrain", "export_champion"),
                    ("score_new_batches", "publish_scores"), ("export_champion", "publish_scores")}
