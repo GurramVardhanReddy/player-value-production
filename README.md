@@ -74,7 +74,8 @@ looks.
 ## Scoring API (Google Cloud Run)
 
 FastAPI service with the exported champion baked into the image, deployed to Cloud Run
-(europe-west1, scales to zero).
+(europe-west1, scales to zero): https://player-value-api-792548722064.europe-west1.run.app
+(the first request after an idle spell takes a few seconds while an instance starts).
 
 - `GET /health`
 - `GET /model`: version, house margin and value-band edges of the champion
@@ -82,6 +83,7 @@ FastAPI service with the exported champion baked into the image, deployed to Clo
   a value band out (1 = top 10% of the champion's training players)
 
 ```bash
+URL=https://player-value-api-792548722064.europe-west1.run.app
 curl -s -X POST "$URL/score" -H 'content-type: application/json' -d '[{"player_id": 1,
   "first_bet_date": "2005-03-01", "stake_90": 900, "stake_live_90": 100, "win_90": 810,
   "bets_90": 60, "active_days_90": 25, "last_active_day": 85, "stake_wk1": 80, "stake_m1": 300,
