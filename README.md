@@ -1,16 +1,19 @@
-# Player Value in Production: weekly scoring, drift monitoring and gated retraining
+# Production ML Pipeline: weekly scoring, drift monitoring and gated retraining
 
-[player-value-model](https://github.com/GurramVardhanReddy/player-value-model) showed that a
-gradient-boosting model can pick out, from a player's first 90 days, the players who will be worth
-the most over the next year. This project runs that model the way a sportsbook would: as a weekly
-Airflow pipeline with an MLflow model registry, drift monitoring, monthly retraining that has to
-beat the live model before it replaces it, a scoring API on Google Cloud Run, and scores
-published to Snowflake for CRM.
+[customer-lifetime-value-model](https://github.com/GurramVardhanReddy/customer-lifetime-value-model)
+showed that a gradient-boosting model can pick out, from a customer's first 90 days, the customers who
+will be worth the most over the next year. This project runs that model in production as a weekly
+**Apache Airflow** pipeline, with:
+- an **MLflow model registry**;
+- **drift monitoring** (PSI);
+- monthly retraining whose challenger has to beat the live model before it replaces it;
+- a **FastAPI scoring API on Google Cloud Run**;
+- scores published to **Snowflake** for CRM.
 
-It is replayed over real history: daily betting records of bwin customers (bwin is now part of
-Entain) from the Transparency Project (Division on Addiction), played back week by week from May
-2005 to September 2006, so every decision the pipeline makes uses only what it could have known on
-that date.
+The pipeline is replayed over real history, played back week by week from May 2005 to September 2006.
+Every decision it makes uses only what it could have known on that date. The history is real daily
+transaction records of an online entertainment platform's customers (a public research dataset; see
+[Data](#data)).
 
 ## What happens each Monday
 
@@ -19,20 +22,22 @@ ensure_champion -> score_new_batches -> evaluate_matured -> maybe_retrain -> exp
                           \______________________________________________________________________/
 ```
 
-1. **Score.** Players whose first 90 days just ended are scored by the current champion (the MLflow
-   model version with the `champion` alias): expected next-year turnover, and GGR = turnover × house
-   margin.
-2. **Monitor drift.** Each new batch is compared with the champion's training players: PSI per
-   feature (10 quantile bins) and on the score itself; warn at 0.10, alert at 0.25.
+1. **Score.** Customers whose first 90 days just ended are scored by the current champion (the
+   MLflow model version with the `champion` alias). The score is expected next-year spend, and
+   expected revenue = spend × margin.
+2. **Monitor drift.** Each new batch is compared with the champion's training customers: PSI per
+   feature (10 quantile bins) and on the score itself. It warns at 0.10 and alerts at 0.25.
 3. **Grade.** A batch's real outcome arrives a year after it was scored. It is graded with the model
-   version that actually scored it: share of next-year GGR captured by the top 10%, turnover Gini,
-   and total forecast vs actual.
-4. **Retrain (first Monday of the month).** A challenger is trained on all outcomes known so far
-   except the newest 4 weeks, which are held out. It is promoted only if it captures at least as
-   much GGR in its top 10% on that holdout **and** its total turnover forecast is no further from
-   actual than the champion's.
-5. **Export and publish.** The champion is exported to the scoring service, and new scores are
-   written to `MARKETING.PLAYER_VALUE.SCORES` in Snowflake by a least-privilege role.
+   version that actually scored it, on three measures:
+   - the share of next-year revenue captured by the top 10%;
+   - spend Gini;
+   - total forecast vs actual.
+4. **Retrain (first Monday of the month).** A challenger is trained on all outcomes known so far,
+   except the newest 4 weeks, which are held out. It is promoted only if both hold on that holdout:
+   - its top 10% captures at least as much revenue as the champion's;
+   - its total spend forecast is no further from actual than the champion's.
+5. **Export and publish.** The champion is exported to the scoring service. A least-privilege role
+   writes new scores to `MARKETING.PLAYER_VALUE.SCORES` in Snowflake.
 
 Tasks run in the project's own Python environment (`@task.external_python`), so Airflow's
 dependencies never clash with MLflow and scikit-learn.
@@ -41,24 +46,24 @@ dependencies never clash with MLflow and scikit-learn.
 
 All numbers come from `results/replay_summary.json` and `results/batches.csv`.
 
-- **68 weekly Airflow runs**, all succeeded (`airflow dags test`, one run per Monday, in order).
-- **29,472 players scored** in 16 weekly batches. The first champion was trained on the first two
-  weeks of players (11,775) as a stand-in prior cohort.
-- **The label delay decides everything.** Because outcomes take a year, every production batch
-  was scored by v1 before a single outcome arrived. For that whole year drift monitoring is the only
+- **68 weekly Airflow runs, all succeeded** (`airflow dags test`, one run per Monday, in order).
+- **29,472 customers scored** in 16 weekly batches. The first champion was trained on the first two
+  weeks of customers (11,775) as a stand-in prior cohort.
+- **The label delay decides everything.** Outcomes take a year to arrive, so every production batch
+  was scored by v1 before a single outcome came in. For that whole year, drift monitoring is the only
   early warning there is.
 - **Drift alerts fired on 14 of 16 batches**, every time on `reg_to_first_bet` and
-  `reg_to_first_dep` (days from registration to first bet / first deposit). This is real: the
-  dataset is a cohort that registered in February 2005, so players who first bet months later have
-  long registration gaps the training players never had. The score distribution itself never
-  reached the alert level (highest PSI 0.248, on a 94-player batch).
-- **Accuracy held up anyway.** The top 10% of players picked captured 63.8% of next-year GGR on the
-  first 4 batches and 62.1% on the last 4. Across batches, the worst feature's PSI and the
+  `reg_to_first_dep` (days from registration to first purchase / first deposit). This is real
+  drift. The dataset is a cohort that registered in February 2005, so customers who first purchased
+  months later have long registration gaps the training customers never had. The score distribution
+  itself never reached the alert level (highest PSI 0.248, on a 94-customer batch).
+- **Accuracy held up anyway.** The top 10% of customers picked captured 63.8% of next-year revenue on
+  the first 4 batches and 62.1% on the last 4. Across batches, the worst feature's PSI and the
   top-10% capture were uncorrelated (Spearman 0.03). Drift on two timing features did not mean the
-  model got worse, which is why retraining is gated on graded outcomes rather than on drift alone.
+  model got worse. That is why retraining is gated on graded outcomes rather than on drift alone.
 - **Gated retraining:** 3 challengers trained, 1 promoted.
 
-| Challenger | Top-10% GGR share (challenger vs champion) | Total turnover forecast / actual | Promoted |
+| Challenger | Top-10% revenue share (challenger vs champion) | Total spend forecast / actual | Promoted |
 |---|---|---|---|
 | v2 vs v1 | 70.0% vs 69.0% | 0.952 vs 1.019 | No: better ranking, worse total |
 | v3 vs v1 | 62.8% vs 61.4% | 1.001 vs 1.062 | **Yes** |
@@ -66,21 +71,24 @@ All numbers come from `results/replay_summary.json` and `results/batches.csv`.
 
   v3 is the final champion and the model behind the API.
 
-**Limits.** Later batches are small (as few as 59 players), so their per-batch metrics are noisy;
-holdouts shrink the same way (463 players for v4). The replay compresses one registration cohort
-into weekly arrivals, so it shows how the pipeline behaves, not how a live sportsbook's traffic
-looks.
+**Limits.**
+- Later batches are small (as few as 59 customers), so their per-batch metrics are noisy.
+- Holdouts shrink the same way (463 customers for v4).
+- The replay compresses one registration cohort into weekly arrivals. It shows how the pipeline
+  behaves, not how a live platform's traffic looks.
 
 ## Scoring API (Google Cloud Run)
 
-FastAPI service with the exported champion baked into the image, deployed to Cloud Run
-(europe-west1, scales to zero): https://player-value-api-792548722064.europe-west1.run.app
-(the first request after an idle spell takes a few seconds while an instance starts).
+A FastAPI service with the exported champion baked into the image, deployed to Cloud Run
+(europe-west1, scales to zero): https://player-value-api-792548722064.europe-west1.run.app. The
+first request after an idle spell takes a few seconds while an instance starts.
 
 - `GET /health`
-- `GET /model`: version, house margin and value-band edges of the champion
-- `POST /score`: a list of first-90-day player summaries in, expected turnover, expected GGR and
-  a value band out (1 = top 10% of the champion's training players)
+- `GET /model`: the champion's version, margin and value-band edges
+- `POST /score`: takes a list of first-90-day customer summaries. It returns expected spend, expected
+  revenue and a value band (1 = top 10% of the champion's training customers).
+
+The request schema keeps the original dataset's field names (`player_id`, `stake_90`, and so on):
 
 ```bash
 URL=https://player-value-api-792548722064.europe-west1.run.app
@@ -94,8 +102,7 @@ curl -s -X POST "$URL/score" -H 'content-type: application/json' -d '[{"player_i
 
 ## Run it
 
-The bwin data is not redistributed here; it is available from the Transparency Project. Build
-the feature table with player-value-model, then:
+Build the feature table with customer-lifetime-value-model, then:
 
 ```bash
 pip install -e ".[pipeline,serve,dev]"
@@ -107,13 +114,21 @@ python -m pvprod.cli summary
 gcloud run deploy player-value-api --source . --region europe-west1
 ```
 
-Snowflake: `infra/main.tf` (Terraform) adds the `PLAYER_VALUE` schema to the `MARKETING` database
-from [marketing-data-platform](https://github.com/GurramVardhanReddy/marketing-data-platform) and
-lets its `TRANSFORMER` role create tables there. `publish_scores` runs only when
-`SNOWFLAKE_ACCOUNT` is set; key-pair auth, no passwords.
+**Snowflake.** `infra/main.tf` (Terraform) adds the `PLAYER_VALUE` schema to the `MARKETING`
+database from [marketing-data-platform](https://github.com/GurramVardhanReddy/marketing-data-platform),
+and lets its `TRANSFORMER` role create tables there. `publish_scores` runs only when
+`SNOWFLAKE_ACCOUNT` is set; it uses key-pair auth, no passwords.
 
 ## Tests and CI
 
-GitHub Actions runs ruff and pytest (a synthetic end-to-end run of bootstrap, scoring, grading,
-retraining and export, plus API tests), installs Airflow 3.1.3 and checks the DAG's task graph,
-and builds the Docker image and calls `/health` and `/model` on it.
+GitHub Actions runs three checks:
+- ruff and pytest: a synthetic end-to-end run of bootstrap, scoring, grading, retraining and export,
+  plus API tests;
+- an install of Airflow 3.1.3 and a check of the DAG's task graph;
+- a Docker image build that calls `/health` and `/model` on the image.
+
+## Data
+
+The history is the public Transparency Project dataset of the Division on Addiction (Cambridge Health
+Alliance). It holds daily transaction records of customers of bwin, an online sports-betting operator
+(now part of Entain). It is not redistributed here; it is available from the Transparency Project.
